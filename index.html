@@ -292,7 +292,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610032158";
+const VERSION = "202610051145";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -798,7 +798,14 @@ async function abrirProyecto(pid){salirNuevo(false);if(vista3d)activar3D(false);
  history.replaceState(null,"","?p="+pid);document.title=`${D.meta.nombre} · Trazados de teleférico`;
  $("badgeTxt").textContent=PUB()?"Versión pública · agregada":"Versión interna · datos prediales";
  $("tituloRes").textContent=D.meta.nombre;cacheIso.clear();cacheRas.clear();P.rasante_modo.v=D.meta.rasante_modo||"galibo";armarParams();prepararDatos();dibujarBaseProyecto();
- let ok=false;try{const j=JSON.parse(localStorage.getItem(`telef_actual_${pid}`)||"null");if(j&&j.lineas&&j.lineas.length){S=j;ok=true;}}catch(e){}
+ let ok=false;try{const j=JSON.parse(localStorage.getItem(`telef_actual_${pid}`)||"null");if(j&&j.lineas&&j.lineas.length){
+  // un trazado guardado con estaciones fuera del área del proyecto (p. ej. dibujado sobre otra ciudad) no se abre:
+  // se conserva en «Trazados guardados» y se carga el referencial
+  const xs=D.area.map(p=>p[0]),ys=D.area.map(p=>p[1]),m=.03,fuera=j.lineas.some(l=>l.est.some(e=>e.lon<Math.min(...xs)-m||e.lon>Math.max(...xs)+m||e.lat<Math.min(...ys)-m||e.lat>Math.max(...ys)+m));
+  if(fuera){const t=trazadosGuardados(),nom=`Recuperado fuera del área ${new Date().toISOString().slice(0,16).replace("T"," ")}`;t[nom]={...j,params:{},fecha:new Date().toISOString()};guardarTrazados(t);
+   setTimeout(()=>alert(`El trazado guardado de este proyecto tenía estaciones fuera de su área de estudio, así que se cargó el referencial.
+Lo dejé en «Trazados guardados» como «${nom}».`),300);}
+  else{S=j;ok=true;}}}catch(e){}
  panelTrazados();panelAlternativas();if(ok)render();else cargarReferencial();}
 // nuevo proyecto
 let respaldoS=null;
