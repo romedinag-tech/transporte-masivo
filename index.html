@@ -292,7 +292,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610061915";
+const VERSION = "202610061923";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -492,7 +492,9 @@ function calcular(){
 
 function sobrevuelo(R){const O={fajas:[],huellas:[],ed:new Map(),lot:new Map()};
  R.tramos.forEach(t=>O.fajas.push(rect(R.est[t.a].xy,R.est[t.b].xy,V("faja"))));
- S.lineas.filter(incl).forEach(l=>l.est.forEach((e,i)=>{const p=toXY(e.lon,e.lat);let d=[1,0];if(l.est.length>1){const a=l.est[Math.max(0,i-1)],b=l.est[Math.min(l.est.length-1,i+1)];const A=toXY(a.lon,a.lat),B=toXY(b.lon,b.lat);d=[B[0]-A[0],B[1]-A[1]];}
+ S.lineas.filter(incl).forEach(l=>l.est.forEach((e,i)=>{
+  if(e.huella){const dx=e.lon-e.hb[0],dy=e.lat-e.hb[1];O.huellas.push(e.huella.map(([x,y])=>[x+dx,y+dy]));return;}   // huella entregada (KMZ)
+  const p=toXY(e.lon,e.lat);let d=[1,0];if(l.est.length>1){const a=l.est[Math.max(0,i-1)],b=l.est[Math.min(l.est.length-1,i+1)];const A=toXY(a.lon,a.lat),B=toXY(b.lon,b.lat);d=[B[0]-A[0],B[1]-A[1]];}
   const L=Math.hypot(...d)||1,u=[d[0]/L,d[1]/L],h=V("est_largo")/2;O.huellas.push(rect([p[0]-u[0]*h,p[1]-u[1]*h],[p[0]+u[0]*h,p[1]+u[1]*h],V("est_ancho")));}));
  const ev=(pts,tipo)=>{const T=turf.polygon([pts]),b=bboxP(pts);
   for(const i of candidatos(IE,b)){if(turf.booleanIntersects(polyT(D.edificaciones[i][0]),T)){const o=O.ed.get(i)||{};o[tipo]=true;O.ed.set(i,o);}}
@@ -646,8 +648,9 @@ function panelLineas(){const C=COLS();const ll=$("listaLineas");ll.innerHTML="";
   d.querySelector("button").onclick=()=>{l.est.splice(ei,1);render();};le.appendChild(d);});}
 function panelAlternativas(){const al=D.alternativas||[],cont=$("listaAlt");$("boxAlt").hidden=!al.length;cont.innerHTML="";
  al.forEach(a=>{const d=document.createElement("div");d.className="it";d.title=a.descripcion||"";
-  d.innerHTML=`<span style="flex:1">${a.nombre}<br><span class="mut" style="font-size:.7rem">${a.lineas.length} líneas · ${a.lineas.reduce((s,l)=>s+l.estaciones.length,0)} est.</span></span><button class="b">Cargar</button>`;
-  d.querySelector(".b").onclick=()=>{S.lineas=a.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2]}))}));S.activa=0;$("nomTraz").value=a.nombre;render();encuadrar();};cont.appendChild(d);});}
+  const nh=a.lineas.reduce((s,l)=>s+l.estaciones.filter(e=>e[3]).length,0);
+  d.innerHTML=`<span style="flex:1">${a.nombre}<br><span class="mut" style="font-size:.7rem">${a.lineas.length} línea${a.lineas.length>1?"s":""} · ${a.lineas.reduce((s,l)=>s+l.estaciones.length,0)} est.${nh?` · ${nh} con huella propia`:""}</span></span><button class="b">Cargar</button>`;
+  d.querySelector(".b").onclick=()=>{S.lineas=a.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2],...(e[3]?{huella:e[3],hb:[e[0],e[1]]}:{})}))}));S.activa=0;$("nomTraz").value=a.nombre;render();encuadrar();};cont.appendChild(d);});}
 function panelTrazados(){const t=trazadosGuardados(),cont=$("listaTraz");cont.innerHTML=Object.keys(t).length?"":`<p class="nota">Aún no hay trazados guardados en este proyecto.</p>`;
  Object.entries(t).sort((a,b)=>b[1].fecha.localeCompare(a[1].fecha)).forEach(([nom,v])=>{const d=document.createElement("div");d.className="it";
   d.innerHTML=`<span style="flex:1">${nom}<br><span class="mut" style="font-size:.7rem">${v.fecha.slice(0,16).replace("T"," ")} · ${v.lineas.reduce((s,l)=>s+l.est.length,0)} est.</span></span><button class="b">Cargar</button><button class="x" title="Borrar" aria-label="Borrar trazado">✕</button>`;
@@ -795,6 +798,8 @@ function render(){clearTimeout(timer);timer=setTimeout(()=>{if(!D)return;dibujar
 async function cargarIndice(){try{INDICE=await (await fetch("proyectos/index.json?v="+VERSION)).json();}catch(e){$("projbar").insertAdjacentHTML("beforeend",`<span class="nota">No se pudo leer proyectos/index.json — abre la herramienta desde un servidor (GitHub Pages o el servidor local), no como archivo.</span>`);return;}
  const pb=$("projbar");INDICE.proyectos.forEach(p=>{const b=document.createElement("button");b.textContent=p.nombre;b.dataset.id=p.id;if(!p.listo){b.disabled=true;b.title="El motor aún no procesa este proyecto";}b.onclick=()=>abrirProyecto(p.id);pb.appendChild(b);});
  const nb=document.createElement("button");nb.className="nuevo";nb.textContent="+ Nuevo proyecto";nb.onclick=()=>{$("modal").style.display="flex";};pb.appendChild(nb);
+ try{$("badge").title=`Versión ${VERSION}`;const vs=(await (await fetch(`version.json?t=${Date.now()}`,{cache:"no-store"})).json()).version;
+  if(vs&&vs!==VERSION&&VERSION.indexOf("__")<0){const k=`recarga_${vs}`;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");const u=new URL(location.href);u.searchParams.set("v",vs);location.replace(u.toString());return;}}}catch(e){}
  const q=new URLSearchParams(location.search).get("p"),pid=(INDICE.proyectos.find(p=>p.id===q&&p.listo)||INDICE.proyectos.find(p=>p.listo)||{}).id;if(pid)abrirProyecto(pid);}
 async function abrirProyecto(pid){salirNuevo(false);if(vista3d)activar3D(false);$("tituloRes").textContent="Cargando…";
  try{D=await (await fetch(`proyectos/${pid}.json?v=${VERSION}`)).json();}catch(e){$("tituloRes").textContent="No se pudo cargar el proyecto";return;}
