@@ -292,7 +292,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610061907";
+const VERSION = "202610061915";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -374,8 +374,13 @@ const bboxP=pts=>bboxR([pts]);
 let S={lineas:[],activa:0,centro:null},modo=null;   // modo: null | "agregar" | "area"
 let nuevo=null;                                      // proyecto en construcción
 function clonar(o){return JSON.parse(JSON.stringify(o));}
+function limitesTrazado(){const xs=D.area.map(p=>p[0]),ys=D.area.map(p=>p[1]),m=.03,
+  dentro=e=>e.lon>=Math.min(...xs)-m&&e.lon<=Math.max(...xs)+m&&e.lat>=Math.min(...ys)-m&&e.lat<=Math.max(...ys)+m,
+  pts=S.lineas.filter(incl).flatMap(l=>l.est).filter(dentro).map(e=>[e.lon,e.lat]);
+ return pts.length>1?pts:D.area;}   // [[lon,lat],…]
+function encuadrar(){const b=L.latLngBounds(limitesTrazado().map(p=>[p[1],p[0]]));map.fitBounds(b,{padding:[50,50],maxZoom:16});}
 function cargarReferencial(){const ref=D.anteproyecto;S.lineas=ref.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2]}))}));
- S.activa=0;const c=D.meta.centro||[S.lineas[0].est[0].lon,S.lineas[0].est[0].lat];S.centro={lon:c[0],lat:c[1]};render();}
+ S.activa=0;const c=D.meta.centro||[S.lineas[0].est[0].lon,S.lineas[0].est[0].lat];S.centro={lon:c[0],lat:c[1]};$("nomTraz").value="";render();encuadrar();}
 function lienzoVacio(){S.lineas=[{nombre:"Línea 1",est:[]}];S.activa=0;if(!S.centro){const c=D.meta.centro||[LON0,LAT0];S.centro={lon:c[0],lat:c[1]};}render();}
 const anguloEn=(l,i)=>{if(i<=0||i>=l.est.length-1)return 0;const a=toXY(l.est[i-1].lon,l.est[i-1].lat),b=toXY(l.est[i].lon,l.est[i].lat),c=toXY(l.est[i+1].lon,l.est[i+1].lat);
  let d=(Math.atan2(c[1]-b[1],c[0]-b[0])-Math.atan2(b[1]-a[1],b[0]-a[0]))*180/Math.PI;while(d>180)d-=360;while(d<-180)d+=360;return d;};
@@ -642,11 +647,11 @@ function panelLineas(){const C=COLS();const ll=$("listaLineas");ll.innerHTML="";
 function panelAlternativas(){const al=D.alternativas||[],cont=$("listaAlt");$("boxAlt").hidden=!al.length;cont.innerHTML="";
  al.forEach(a=>{const d=document.createElement("div");d.className="it";d.title=a.descripcion||"";
   d.innerHTML=`<span style="flex:1">${a.nombre}<br><span class="mut" style="font-size:.7rem">${a.lineas.length} líneas · ${a.lineas.reduce((s,l)=>s+l.estaciones.length,0)} est.</span></span><button class="b">Cargar</button>`;
-  d.querySelector(".b").onclick=()=>{S.lineas=a.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2]}))}));S.activa=0;$("nomTraz").value=a.nombre;render();};cont.appendChild(d);});}
+  d.querySelector(".b").onclick=()=>{S.lineas=a.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2]}))}));S.activa=0;$("nomTraz").value=a.nombre;render();encuadrar();};cont.appendChild(d);});}
 function panelTrazados(){const t=trazadosGuardados(),cont=$("listaTraz");cont.innerHTML=Object.keys(t).length?"":`<p class="nota">Aún no hay trazados guardados en este proyecto.</p>`;
  Object.entries(t).sort((a,b)=>b[1].fecha.localeCompare(a[1].fecha)).forEach(([nom,v])=>{const d=document.createElement("div");d.className="it";
   d.innerHTML=`<span style="flex:1">${nom}<br><span class="mut" style="font-size:.7rem">${v.fecha.slice(0,16).replace("T"," ")} · ${v.lineas.reduce((s,l)=>s+l.est.length,0)} est.</span></span><button class="b">Cargar</button><button class="x" title="Borrar" aria-label="Borrar trazado">✕</button>`;
-  d.querySelector(".b").onclick=()=>{S=clonar({lineas:v.lineas,centro:v.centro,activa:0});if(v.params)for(const k in v.params)if(P[k])P[k].v=v.params[k];armarParams();cacheIso.clear();$("nomTraz").value=nom;render();};
+  d.querySelector(".b").onclick=()=>{S=clonar({lineas:v.lineas,centro:v.centro,activa:0});if(v.params)for(const k in v.params)if(P[k])P[k].v=v.params[k];armarParams();cacheIso.clear();$("nomTraz").value=nom;render();encuadrar();};
   d.querySelector(".x").onclick=()=>{if(confirm(`¿Borrar el trazado «${nom}»?`)){delete t[nom];guardarTrazados(t);panelTrazados();}};cont.appendChild(d);});}
 const claveT=()=>`telef_trazados_${PID}`;
 function trazadosGuardados(){try{return JSON.parse(localStorage.getItem(claveT())||"{}");}catch(e){return {};}}
@@ -742,20 +747,19 @@ let M3=null,vista3d=false,marcas3d=[],listo3d=false;
 function cargarScript(u){return new Promise((ok,mal)=>{const t=document.createElement("script");t.src=u;t.onload=ok;t.onerror=mal;document.head.appendChild(t);});}
 async function activar3D(on){
  vista3d=on;$("v2d").classList.toggle("on",!on);$("v3d").classList.toggle("on",on);$("map3d").style.display=on?"block":"none";
- if(!on){if(M3){const c=M3.getCenter();map.setView([c.lat,c.lng],Math.round(M3.getZoom()+1));}return;}
+ if(!on){if(M3&&D)encuadrar();return;}
  if(!window.maplibregl){try{const l=document.createElement("link");l.rel="stylesheet";l.href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.css";document.head.appendChild(l);
    await cargarScript("https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.js");}catch(e){alert("No se pudo cargar el visor 3D (requiere internet).");activar3D(false);return;}}
- const c=map.getCenter(),dem={type:"raster-dem",tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],encoding:"terrarium",tileSize:256,maxzoom:15,attribution:"Relieve: AWS Terrain Tiles"};
+ const lim=limitesTrazado(),lx=lim.map(p=>p[0]),ly=lim.map(p=>p[1]),bb=[[Math.min(...lx),Math.min(...ly)],[Math.max(...lx),Math.max(...ly)]],c={lng:(bb[0][0]+bb[1][0])/2,lat:(bb[0][1]+bb[1][1])/2},dem={type:"raster-dem",tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],encoding:"terrarium",tileSize:256,maxzoom:15,attribution:"Relieve: AWS Terrain Tiles"};
  const base=baseActual==="sat"?{tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],attribution:"Esri World Imagery"}:{tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],attribution:"© OpenStreetMap"};
  listo3d=false;if(M3){marcas3d.forEach(m=>m.remove());marcas3d=[];M3.remove();M3=null;}
- M3=new maplibregl.Map({container:"map3d",center:[c.lng,c.lat],zoom:map.getZoom()-1,pitch:62,bearing:-25,maxPitch:80,
+ M3=new maplibregl.Map({container:"map3d",center:[c.lng,c.lat],zoom:13,pitch:62,bearing:-25,maxPitch:80,
   style:{version:8,sources:{base:{type:"raster",tileSize:256,...base},dem,dem2:{...dem}},
    layers:[{id:"base",type:"raster",source:"base"},{id:"sombreado",type:"hillshade",source:"dem2",paint:{"hillshade-exaggeration":.35}}],
    terrain:{source:"dem",exaggeration:1}}});
  M3.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");
  M3.on("load",()=>{listo3d=true;actualizar3D();
-  const pts=S.lineas.flatMap(l=>l.est.map(e=>[e.lon,e.lat]));if(pts.length>1){const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
-   M3.fitBounds([[Math.min(...xs),Math.min(...ys)],[Math.max(...xs),Math.max(...ys)]],{padding:{top:120,bottom:60,left:60,right:60},pitch:62,bearing:-25,duration:0,maxZoom:16});}});}
+  M3.fitBounds(bb,{padding:{top:120,bottom:60,left:60,right:60},pitch:62,bearing:-25,duration:0,maxZoom:16});});}
 function fc(features){return {type:"FeatureCollection",features};}
 function actualizar3D(){if(!M3||!vista3d||!listo3d||!R)return;const C=COLS();
  const pisos=e=>e[4]||Math.max(1,Math.round((e[3]||0)/(e[6]||1)));
@@ -837,7 +841,7 @@ $("bGuardar").onclick=()=>{const nom=$("nomTraz").value.trim();if(!nom){alert("E
  if(t[nom]&&!confirm(`Ya existe «${nom}». ¿Reemplazarlo?`))return;t[nom]={...clonar(S),params:Object.fromEntries(Object.entries(P).map(([k,p])=>[k,p.v])),fecha:new Date().toISOString()};guardarTrazados(t);panelTrazados();};
 $("bExp").onclick=()=>{const nom=$("nomTraz").value.trim()||"trazado";const b=new Blob([JSON.stringify({proyecto:PID,nombre:nom,...S,params:Object.fromEntries(Object.entries(P).map(([k,p])=>[k,p.v]))},null,1)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`${PID}_${nom}.json`;a.click();};
 $("bImp").onclick=()=>$("fImp").click();
-$("fImp").onchange=ev=>{const f=ev.target.files[0];if(!f)return;f.text().then(t=>{const j=JSON.parse(t);S={lineas:j.lineas,centro:j.centro,activa:0};if(j.params)for(const k in j.params)if(P[k])P[k].v=j.params[k];if(j.nombre)$("nomTraz").value=j.nombre;armarParams();cacheIso.clear();render();});};
+$("fImp").onchange=ev=>{const f=ev.target.files[0];if(!f)return;f.text().then(t=>{const j=JSON.parse(t);S={lineas:j.lineas,centro:j.centro,activa:0};if(j.params)for(const k in j.params)if(P[k])P[k].v=j.params[k];if(j.nombre)$("nomTraz").value=j.nombre;armarParams();cacheIso.clear();render();encuadrar();});};
 function setTheme(dark){document.documentElement.setAttribute("data-theme",dark?"dark":"light");try{localStorage.setItem("theme",dark?"dark":"light");}catch(e){}$("themeBtn").textContent=dark?"☀":"☾";aplicarBase();if(D){dibujarBaseProyecto();render();}}
 $("themeBtn").onclick=()=>setTheme(document.documentElement.getAttribute("data-theme")!=="dark");
 window.addEventListener("resize",()=>{if(R)perfil();});
