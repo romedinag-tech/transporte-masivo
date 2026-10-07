@@ -1,6 +1,6 @@
-# Trazados de teleférico — herramienta multi-proyecto
+# Proyectos de transporte público masivo — herramienta multi-proyecto
 
-**Abrir la herramienta:** https://romedinag-tech.github.io/teleferico-talcahuano/
+**Abrir la herramienta:** https://romedinag-tech.github.io/transporte-masivo/
 
 Herramienta para probar trazados de teleférico urbano. Las estaciones se ubican sobre el mapa y el
 navegador calcula:

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trazados de teleférico</title>
+<title>Transporte público masivo</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 8 L30 4' stroke='%2316365a' stroke-width='2'/%3E%3Crect x='11' y='10' width='10' height='12' rx='2' fill='%231F6FEB'/%3E%3Cpath d='M16 6 V10' stroke='%2316365a' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:wght@600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -129,7 +129,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 <body>
 <div id="app">
  <header class="apptop">
-  <div><div class="title">Trazados de teleférico</div><div class="sub">Herramienta de análisis de trazados urbanos por cable</div></div>
+  <div><div class="title">Proyectos de transporte público masivo</div><div class="sub">Análisis de trazados: teleférico · tranvía · corredor de buses · tren</div></div>
   <div class="right"><span class="badge" id="badge"><span class="led"></span><span id="badgeTxt">Cargando…</span></span>
    <button class="hdr-btn" id="themeBtn" title="Tema claro / oscuro" aria-label="Cambiar tema">☾</button></div>
  </header>
@@ -292,7 +292,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610071513";
+const VERSION = "202610071635";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -379,7 +379,7 @@ function limitesTrazado(){const xs=D.area.map(p=>p[0]),ys=D.area.map(p=>p[1]),m=
   pts=S.lineas.filter(incl).flatMap(l=>l.est).filter(dentro).map(e=>[e.lon,e.lat]);
  return pts.length>1?pts:D.area;}   // [[lon,lat],…]
 function encuadrar(){const b=L.latLngBounds(limitesTrazado().map(p=>[p[1],p[0]]));map.fitBounds(b,{padding:[50,50],maxZoom:16});}
-function cargarReferencial(){const ref=D.anteproyecto;S.lineas=ref.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2]}))}));
+function cargarReferencial(){const ref=D.anteproyecto;S.lineas=ref.lineas.map(l=>({nombre:l.nombre,est:l.estaciones.map(e=>({lon:e[0],lat:e[1],nombre:e[2],...(e[3]?{huella:e[3],hb:[e[0],e[1]]}:{})}))}));
  S.activa=0;const c=D.meta.centro||[S.lineas[0].est[0].lon,S.lineas[0].est[0].lat];S.centro={lon:c[0],lat:c[1]};$("nomTraz").value="";render();encuadrar();}
 function lienzoVacio(){S.lineas=[{nombre:"Línea 1",est:[]}];S.activa=0;if(!S.centro){const c=D.meta.centro||[LON0,LAT0];S.centro={lon:c[0],lat:c[1]};}render();}
 const anguloEn=(l,i)=>{if(i<=0||i>=l.est.length-1)return 0;const a=toXY(l.est[i-1].lon,l.est[i-1].lat),b=toXY(l.est[i].lon,l.est[i].lat),c=toXY(l.est[i+1].lon,l.est[i+1].lat);
@@ -804,7 +804,7 @@ async function cargarIndice(){try{INDICE=await (await fetch("proyectos/index.jso
 async function abrirProyecto(pid){salirNuevo(false);if(vista3d)activar3D(false);$("tituloRes").textContent="Cargando…";
  try{D=await (await fetch(`proyectos/${pid}.json?v=${VERSION}`)).json();}catch(e){$("tituloRes").textContent="No se pudo cargar el proyecto";return;}
  PID=pid;document.querySelectorAll(".projbar button[data-id]").forEach(b=>b.classList.toggle("on",b.dataset.id===pid));
- history.replaceState(null,"","?p="+pid);document.title=`${D.meta.nombre} · Trazados de teleférico`;
+ history.replaceState(null,"","?p="+pid);document.title=`${D.meta.nombre} · Transporte público masivo`;
  $("badgeTxt").textContent=PUB()?"Versión pública · agregada":"Versión interna · datos prediales";
  $("tituloRes").textContent=D.meta.nombre;cacheIso.clear();cacheRas.clear();P.rasante_modo.v=D.meta.rasante_modo||"galibo";armarParams();prepararDatos();dibujarBaseProyecto();
  let ok=false;try{const j=JSON.parse(localStorage.getItem(`telef_actual_${pid}`)||"null");if(j&&j.lineas&&j.lineas.length){
