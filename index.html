@@ -69,6 +69,7 @@ input[type=number]{font-family:var(--font-data)}
 .lista .it:hover{background:var(--surface-alt)}
 .lista .it.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .sw{width:11px;height:11px;border-radius:3px;flex:none}
+.cub td.num{text-align:right;white-space:nowrap}.cub tr.grp td{font-weight:600;color:var(--ink-lo);padding-top:8px;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
 .chk{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex:none}
 .est{display:grid;grid-template-columns:18px 1fr 64px 46px 22px;gap:4px;align-items:center;padding:3px 0;border-bottom:1px dashed var(--line)}
 .est input{padding:3px 5px;font-size:.78rem}
@@ -292,7 +293,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610071733";
+const VERSION = "202610072131";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -330,11 +331,247 @@ const V=k=>+P[k].v;
 // =============================================================== costos unitarios (P178, UF costo directo)
 // Electromecánica (14_P178-TEL_TEL.xlsx): por línea y por estación; arquitectura (05_ARQ): por estación;
 // eléctricas (15_ELEC): por estación-línea; obras urbanas (Cuadro 1.2-11 ítems 1-3, 6-13): por estación física.
-const CU={motriz:116183,retorno:67580,intermedia:62178,garaje:45851,torre:166590/31,cable_com_m:4.72,cable_port_m:8.04,
- cab_m:39.58,cab_est:20030,herr_base:18624,herr_m:7.13,montaje:0.0622,
- arq_extremo:44682,arq_intermedia:42733,arq_transbordo:67701,estructura_est:1756,elec_est_linea:16154,urbanas_est:36490,gg:0.35,iva:0.19};
-// recargo por ángulo (P246 Cuadro 1.2-5, punto medio del rango) sobre electromecánica y arquitectura de la estación
-function recargoAng(a){a=Math.abs(a);const t=[[5,.03],[10,.065],[15,.11],[20,.17],[25,.245],[30,.335],[35,.445],[40,.58]];for(const [lim,r] of t)if(a<lim)return r;return .65;}
+// precios unitarios y factores: datos/costos/precios_unitarios_P178.json, inyectado por construir_sitios.py
+const PRECIOS={
+ "version": "P178 · costo directo en UF al 31-12-2024",
+ "nota": "Precios unitarios del anteproyecto SECTRA P178 (Teleférico de Talcahuano), destilados el 2026-10-07. Cada partida declara su unidad física, la regla con que la herramienta la mide desde el trazado y de qué ítem del presupuesto sale su precio. Donde el P178 sólo trae globales por tramo, el precio unitario sale de dividir por la cantidad física del Cap. 24, y así se declara. Los mismos códigos sirven para la cubicación de Diseño conceptual.",
+ "partidas": [
+  {
+   "cod": "EM-01",
+   "grupo": "Electromecánica",
+   "nombre": "Estación motriz",
+   "unidad": "un",
+   "pu": 116182.99,
+   "regla": "1 por línea (estación de origen)",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.1 (igual en T1 y T2)"
+  },
+  {
+   "cod": "EM-02",
+   "grupo": "Electromecánica",
+   "nombre": "Estación de retorno y tensión",
+   "unidad": "un",
+   "pu": 67579.84,
+   "regla": "1 por línea (estación final)",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.2"
+  },
+  {
+   "cod": "EM-03",
+   "grupo": "Electromecánica",
+   "nombre": "Estación intermedia",
+   "unidad": "un",
+   "pu": 62178.35,
+   "regla": "estaciones de la línea menos 2",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.3 (T2: 1 × 62.178,35; T1: 186.535,05 = 3 × 62.178,35)"
+  },
+  {
+   "cod": "EM-04",
+   "grupo": "Electromecánica",
+   "nombre": "Garaje de cabinas",
+   "unidad": "un",
+   "pu": 45851.37,
+   "regla": "1 por línea",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.4"
+  },
+  {
+   "cod": "EM-05",
+   "grupo": "Electromecánica",
+   "nombre": "Torres de apoyo",
+   "unidad": "un",
+   "pu": 5373.86,
+   "regla": "torres de la rasante",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.5: global por tramo (T1 106.198,58 / 21 torres = 5.057,1; T2 60.391,10 / 10 = 6.039,1). El P178 no permite separar el precio por altura: con dos globales, un ajuste por altura da pendiente negativa. Se usa el promedio; torres más altas quedan subvaloradas."
+  },
+  {
+   "cod": "EM-06",
+   "grupo": "Electromecánica",
+   "nombre": "Cable portador-tractor",
+   "unidad": "m de cable",
+   "pu": 3.9813,
+   "regla": "2 × largo inclinado de la línea × factor de bucles",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.7, ÷ longitud de cable del Cap. 24 (5.819,06 + 2.620,26 m). Por tramo: 3,96 y 4,03 UF/m."
+  },
+  {
+   "cod": "EM-07",
+   "grupo": "Electromecánica",
+   "nombre": "Cable de comunicaciones y línea de seguridad",
+   "unidad": "m de cable",
+   "pu": 2.3371,
+   "regla": "igual que EM-06",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.6, ÷ la misma longitud de cable. Por tramo: 2,32 y 2,38 UF/m."
+  },
+  {
+   "cod": "EM-08",
+   "grupo": "Electromecánica",
+   "nombre": "Cabinas",
+   "unidad": "un",
+   "pu": 1595.91,
+   "regla": "flota = (2 × largo inclinado ÷ velocidad + pasos por estación × tiempo de paso) ÷ intervalo × factor de flota",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.1.8 ÷ flota final del Cap. 24 Cuadro 24.1-3 (136 + 68 = 204). INFERENCIA: el presupuesto no dice para qué flota es; con la final da 1.573 y 1.641 UF por cabina (coherentes, ±2 %), con la inicial (62 + 40) daría 3.451 y 2.791 (difieren 24 %)."
+  },
+  {
+   "cod": "EM-09",
+   "grupo": "Electromecánica",
+   "nombre": "Herramientas, repuestos y equipos de rescate (base)",
+   "unidad": "un",
+   "pu": 18625.81,
+   "regla": "1 por línea",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítems 14.1.9–14.1.11: ajuste exacto a T1 y T2 de base + monto por metro de línea"
+  },
+  {
+   "cod": "EM-10",
+   "grupo": "Electromecánica",
+   "nombre": "Herramientas, repuestos y equipos de rescate (por metro)",
+   "unidad": "m de línea",
+   "pu": 7.1295,
+   "regla": "largo en planta de la línea",
+   "fuente": "idem EM-09"
+  },
+  {
+   "cod": "EM-11",
+   "grupo": "Electromecánica",
+   "nombre": "Montaje y acompañamiento de la operación",
+   "unidad": "% del suministro",
+   "pu": 0.06221,
+   "regla": "sobre EM-01 a EM-10 y recargo",
+   "fuente": "14_P178-TEL_TEL.xlsx (Drive MTT, carpeta «1. Presupuesto»), UF al 31-12-2024 = $38.416,69, ítem 14.2 ÷ suministro (T1 + T2)"
+  },
+  {
+   "cod": "REC-01",
+   "grupo": "Recargo",
+   "nombre": "Recargo por ángulo en estación",
+   "unidad": "% de EM y ARQ de la estación",
+   "pu": null,
+   "regla": "según el ángulo de quiebre, tabla de factores",
+   "fuente": "P246 Cuadro 1.2-5, punto medio de cada rango"
+  },
+  {
+   "cod": "ARQ-01",
+   "grupo": "Obras civiles",
+   "nombre": "Arquitectura estación extrema",
+   "unidad": "un",
+   "pu": 44682,
+   "regla": "estación física en extremo de línea",
+   "fuente": "05_P178-TEL_ARQ.xlsx (7 estaciones)"
+  },
+  {
+   "cod": "ARQ-02",
+   "grupo": "Obras civiles",
+   "nombre": "Arquitectura estación intermedia",
+   "unidad": "un",
+   "pu": 42733,
+   "regla": "estación física intermedia",
+   "fuente": "05_P178-TEL_ARQ.xlsx"
+  },
+  {
+   "cod": "ARQ-03",
+   "grupo": "Obras civiles",
+   "nombre": "Arquitectura estación de transbordo",
+   "unidad": "un",
+   "pu": 67701,
+   "regla": "estación física compartida por dos líneas (< 80 m)",
+   "fuente": "05_P178-TEL_ARQ.xlsx"
+  },
+  {
+   "cod": "EST-01",
+   "grupo": "Obras civiles",
+   "nombre": "Estructuras",
+   "unidad": "un",
+   "pu": 1756,
+   "regla": "por estación física",
+   "fuente": "P246 Cuadro 1.2-11, ítem 4 ÷ 7 estaciones"
+  },
+  {
+   "cod": "ELE-01",
+   "grupo": "Obras civiles",
+   "nombre": "Instalaciones eléctricas",
+   "unidad": "un",
+   "pu": 16154,
+   "regla": "por estación y línea",
+   "fuente": "15_P178-TEL_ELEC.xlsx ÷ 8"
+  },
+  {
+   "cod": "URB-01",
+   "grupo": "Obras civiles",
+   "nombre": "Obras urbanas complementarias",
+   "unidad": "un",
+   "pu": 36490,
+   "regla": "por estación física",
+   "fuente": "P246 Cuadro 1.2-11, ítems 1–3 y 6–13 ÷ 7"
+  },
+  {
+   "cod": "EXP-01",
+   "grupo": "Expropiación",
+   "nombre": "Terreno",
+   "unidad": "m²",
+   "pu": null,
+   "regla": "superficie de lotes afectados según escenario (E1 faja + estaciones; E2 sólo estaciones)",
+   "fuente": "SII F2890 p50 del área: suelo en casas (central) o sitio eriazo (bajo), parámetro de la herramienta"
+  },
+  {
+   "cod": "EXP-02",
+   "grupo": "Expropiación",
+   "nombre": "Construcción",
+   "unidad": "m² construidos",
+   "pu": null,
+   "regla": "superficie construida de las edificaciones afectadas",
+   "fuente": "SII F2890 p50 por tipología (casa, departamento, comercio)"
+  }
+ ],
+ "factores": {
+  "gg": 0.35,
+  "iva": 0.19,
+  "factor_flota": 1.411,
+  "factor_cable": 1.008,
+  "recargo_angulo": [
+   [
+    5,
+    0.03
+   ],
+   [
+    10,
+    0.065
+   ],
+   [
+    15,
+    0.11
+   ],
+   [
+    20,
+    0.17
+   ],
+   [
+    25,
+    0.245
+   ],
+   [
+    30,
+    0.335
+   ],
+   [
+    35,
+    0.445
+   ],
+   [
+    40,
+    0.58
+   ],
+   [
+    999,
+    0.65
+   ]
+  ]
+ },
+ "calibraciones": {
+  "factor_flota": "flota final P178 (204) ÷ flota física de la herramienta sobre el trazado P178 (98,7 + 45,9 = 144,6) con v = 6 m/s, 50 s por paso y 13,8 s de intervalo. Por tramo 1,38 y 1,48. El Cap. 24 no publica cómo llega a 136 y 68: es CALIBRACIÓN, no física.",
+  "factor_cable": "cable P178 (8.439,32 m) ÷ 2 × largo inclinado de la herramienta (8.372 m): bucles en estaciones."
+ },
+ "contraste": {
+  "p178_costo_directo_uf": 2127475,
+  "p178_total_sin_expropiacion_uf": 3417788
+ }
+};
+const PU=Object.fromEntries(PRECIOS.partidas.map(p=>[p.cod,p]));
+function recargoAng(a){a=Math.abs(a);for(const [lim,r] of PRECIOS.factores.recargo_angulo)if(a<lim)return r;return .65;}
 
 // =============================================================== geometría
 let LAT0=-36.7,LON0=-73.1,KX=1,KY=110540;
@@ -506,31 +743,41 @@ function valorizar(O){const vs=D.valores.por_tipologia,q=(t,c)=>vs[t]&&vs[t][c]?
  const ufS=P.suelo.v==="bajo"?q("Sitio eriazo","uf_m2_terreno"):q("Casa","uf_m2_terreno");
  const ufC=nh=>nh>2?q("Departamento","uf_m2_construido"):nh>0?q("Casa","uf_m2_construido"):(q("Comercio","uf_m2_construido")||q("Casa","uf_m2_construido"));
  const edL=new Map();O.ed.forEach((o,i)=>{const p=D.edificaciones[i][1];if(p==null)return;if(!edL.has(p))edL.set(p,[]);edL.get(p).push([i,o]);});
- function esc(conFaja){const r={uf:0,ufS:0,ufC:0,m2:0,viv:0,pers:0,ed:0,sinLote:0};const af=o=>o.est||(conFaja&&o.faja);
+ function esc(conFaja){const r={uf:0,ufS:0,ufC:0,m2:0,m2c:0,viv:0,pers:0,ed:0,sinLote:0};const af=o=>o.est||(conFaja&&o.faja);
   O.lot.forEach((o,pid)=>{if(!af(o))return;const p=D.predios[pid],nh=p[2],area=p[3],eds=(edL.get(pid)||[]).filter(([,x])=>af(x));
    const aI=Math.min(area,o.aEst+(conFaja?o.aFaja:0));let s=aI;
    if(eds.length&&nh>0&&nh<=2&&area<=2000)s=area;else if(eds.length&&nh>2)s=Math.min(area,Math.max(aI,eds.reduce((t,[i])=>t+(D.edificaciones[i][7]||0),0)));
-   r.m2+=s;r.ufS+=s*ufS;for(const [i] of eds)r.ufC+=D.edificaciones[i][3]*ufC(nh);});
-  O.ed.forEach((o,i)=>{if(!af(o))return;const e=D.edificaciones[i];r.ed++;if(e[2]>0){r.viv+=e[2];const m=D.manzanas[e[5]];r.pers+=e[2]*((m&&m[5])||0);}if(e[1]==null){r.sinLote++;r.ufC+=e[6]*ufC(1);}});
+   r.m2+=s;r.ufS+=s*ufS;for(const [i] of eds){r.ufC+=D.edificaciones[i][3]*ufC(nh);r.m2c+=D.edificaciones[i][3]||0;}});
+  O.ed.forEach((o,i)=>{if(!af(o))return;const e=D.edificaciones[i];r.ed++;if(e[2]>0){r.viv+=e[2];const m=D.manzanas[e[5]];r.pers+=e[2]*((m&&m[5])||0);}if(e[1]==null){r.sinLote++;r.ufC+=e[6]*ufC(1);r.m2c+=e[6]||0;}});
   r.uf=r.ufS+r.ufC;return r;}
  let terr=0;O.lot.forEach((o,pid)=>{if(o.faja&&D.predios[pid][2]>0)terr++;});
  return {E1:esc(true),E2:esc(false),terr,ufS};}
 
 function inversion(R,VAL){
- // estaciones físicas: las de distinta línea a < 80 m son una estación de transbordo
+ // 1) cubicación: cantidades físicas medidas del trazado · 2) × precio unitario del catálogo (PRECIOS)
+ const F=PRECIOS.factores,q={},add=(c,v)=>q[c]=(q[c]||0)+v;let recEM=0,recARQ=0,nRec=0,nTor=0;const detLineas=[];
  const fis=[];R.est.forEach((s,i)=>{const f=fis.find(f=>f.some(j=>dist(R.est[j].xy,s.xy)<80&&R.est[j].li!==s.li));if(f)f.push(i);else fis.push([i]);});
- const c={em:0,torres:0,cables:0,cabinas:0,otros_em:0,montaje:0,arq:0,estr:0,elec:0,urb:0,recargo:0};let nTor=0;
- S.lineas.forEach((l,li)=>{const n=l.est.length;if(n<2||!incl(l))return;const L=R.tramos.filter(t=>t.li===li).reduce((s,t)=>s+t.L,0);
-  const ang=l.est.map((_,i)=>anguloEn(l,i));
-  const emEst=[CU.motriz,...Array(n-2).fill(CU.intermedia),CU.retorno];
-  emEst.forEach((v,i)=>{c.em+=v;c.recargo+=v*(i>0&&i<n-1?recargoAng(ang[i]):0);});
-  c.otros_em+=CU.garaje+CU.herr_base+CU.herr_m*L;const ras=rasante(l);c.torres+=CU.torre*ras.torres.length;nTor+=ras.torres.length;c.cables+=(CU.cable_com_m+CU.cable_port_m)*L;c.cabinas+=CU.cab_m*L+CU.cab_est*n;
-  c.elec+=CU.elec_est_linea*n;});
- c.montaje=CU.montaje*(c.em+c.recargo+c.otros_em+c.torres+c.cables+c.cabinas);
+ S.lineas.forEach((l,li)=>{const n=l.est.length;if(n<2||!incl(l))return;const tr=R.tramos.filter(t=>t.li===li),L=tr.reduce((s,t)=>s+t.L,0),Li=tr.reduce((s,t)=>s+t.Li,0);
+  const ras=rasante(l),cable=2*Li*F.factor_cable,ciclo=2*Li/V("v_linea")+(2+2*(n-2))*V("t_est"),flota=Math.ceil(ciclo/V("intervalo")*F.factor_flota);
+  add("EM-01",1);add("EM-02",1);add("EM-03",n-2);add("EM-04",1);add("EM-05",ras.torres.length);add("EM-06",cable);add("EM-07",cable);add("EM-08",flota);add("EM-09",1);add("EM-10",L);add("ELE-01",n);
+  nTor+=ras.torres.length;
+  l.est.forEach((e,i)=>{if(i>0&&i<n-1){const r=recargoAng(anguloEn(l,i));if(r){recEM+=PU["EM-03"].pu*r;nRec++;}}});
+  detLineas.push({linea:l.nombre,est:n,L,Li,cable,ciclo,flota,torres:ras.torres.length});});
  fis.forEach(f=>{const s=R.est[f[0]],l=S.lineas[s.li],extremo=f.every(j=>{const t=R.est[j];return t.ei===0||t.ei===S.lineas[t.li].est.length-1;});
-  let arq=f.length>1?CU.arq_transbordo:(extremo?CU.arq_extremo:CU.arq_intermedia);const a=f.length>1?0:anguloEn(l,s.ei);c.recargo+=arq*recargoAng(a)*(a?1:0);c.arq+=arq;c.estr+=CU.estructura_est;c.urb+=CU.urbanas_est;});
- const cd=Object.values(c).reduce((s,v)=>s+v,0),gg=cd*CU.gg,iva=(cd+gg)*CU.iva;
- return {c,cd,gg,iva,sinExp:cd+gg+iva,E1:cd+gg+iva+VAL.E1.uf,E2:cd+gg+iva+VAL.E2.uf,nFis:fis.length,nTor};}
+  const cod=f.length>1?"ARQ-03":(extremo?"ARQ-01":"ARQ-02");add(cod,1);const a=f.length>1?0:anguloEn(l,s.ei);if(a)recARQ+=PU[cod].pu*recargoAng(a);add("EST-01",1);add("URB-01",1);});
+ const fila=(cod,cant,total)=>({cod,grupo:PU[cod].grupo,nombre:PU[cod].nombre,unidad:PU[cod].unidad,cant,pu:PU[cod].pu,total:total!=null?total:cant*PU[cod].pu,fuente:PU[cod].fuente});
+ const filas=Object.keys(PU).filter(c=>q[c]!=null).map(c=>fila(c,q[c]));
+ const suministro=filas.filter(f=>f.cod.startsWith("EM-")).reduce((s,f)=>s+f.total,0)+recEM;
+ filas.push(fila("EM-11",suministro,suministro*PU["EM-11"].pu));
+ filas.push({...fila("REC-01",nRec,recEM+recARQ),pu:null});
+ const orden=Object.keys(PU);filas.sort((a,b)=>orden.indexOf(a.cod)-orden.indexOf(b.cod));
+ const cd=filas.reduce((s,f)=>s+f.total,0),gg=cd*F.gg,iva=(cd+gg)*F.iva,sinExp=cd+gg+iva;
+ const exp=k=>[{...fila("EXP-01",VAL[k].m2,VAL[k].ufS),pu:VAL[k].m2?VAL[k].ufS/VAL[k].m2:null},{...fila("EXP-02",VAL[k].m2c,VAL[k].ufC),pu:VAL[k].m2c?VAL[k].ufC/VAL[k].m2c:null}];
+ // grupos para los gráficos y el texto (compatibilidad)
+ const g=c=>filas.filter(f=>f.cod===c).reduce((s,f)=>s+f.total,0);
+ const c={em:g("EM-01")+g("EM-02")+g("EM-03"),torres:g("EM-05"),cables:g("EM-06")+g("EM-07"),cabinas:g("EM-08"),otros_em:g("EM-04")+g("EM-09")+g("EM-10"),montaje:g("EM-11"),
+  arq:g("ARQ-01")+g("ARQ-02")+g("ARQ-03"),estr:g("EST-01"),elec:g("ELE-01"),urb:g("URB-01"),recargo:g("REC-01")};
+ return {filas,c,cd,gg,iva,sinExp,E1:sinExp+VAL.E1.uf,E2:sinExp+VAL.E2.uf,expE1:exp("E1"),expE2:exp("E2"),nFis:fis.length,nTor,detLineas};}
 
 // =============================================================== mapa
 const map=L.map("map",{preferCanvas:true,zoomControl:true,doubleClickZoom:false});
@@ -706,15 +953,34 @@ function panelResultados(){const C=COLS(),pob=R.est.reduce((s,e)=>s+e.pob,0),hog
  $("tExp").innerHTML=`<table><tr><th></th><th>E1</th><th>E2</th></tr>`+f("Edificios afectados",fmt(E1.ed),fmt(E2.ed))+f("Viviendas",fmt(E1.viv),fmt(E2.viv))+f("Personas (≈)",fmt(E1.pers),fmt(E2.pers))+
   f("Suelo (m²)",fmt(E1.m2),fmt(E2.m2))+f("Suelo (UF)",fmt(E1.ufS),fmt(E2.ufS))+f("Construcción (UF)",fmt(E1.ufC),fmt(E2.ufC))+f("Total (UF)",fmt(E1.uf),fmt(E2.uf),"tot")+`</table>
   <div class="nota">Suelo ${fmt(VAL.ufS,2)} UF/m² (${P.suelo.v==="bajo"?"p50 sitios eriazos":"p50 suelo en casas"}). Costo del sobrevuelo (E1 − E2): <b class="num">${fmt(E1.uf-E2.uf)} UF</b>.</div>`;
- const c=INV.c,g=(t,v,cl="")=>`<tr class="${cl}"><td>${t}</td><td>${fmt(v)}</td><td>${fmt(100*v/INV.cd,1)}</td></tr>`;
+ const dec=f=>/m de cable|m de línea|m²/.test(f.unidad)?0:(f.unidad==="% del suministro"?0:0);
+ const cel=f=>f.unidad==="% del suministro"?`${fmt(f.cant)} UF base`:`${fmt(f.cant,dec(f))} ${f.unidad==="un"?"":f.unidad}`;
+ const puTxt=f=>f.pu==null?"–":(f.unidad==="% del suministro"?fmt(100*f.pu,2)+" %":fmt(f.pu,f.pu<100?2:0));
+ let grupo="",hc=`<table class="cub"><tr><th>Cód.</th><th>Partida</th><th>Cantidad</th><th>P.U. UF</th><th>Total UF</th></tr>`;
+ INV.filas.forEach(f=>{if(f.grupo!==grupo){grupo=f.grupo;hc+=`<tr class="grp"><td colspan="5">${grupo}</td></tr>`;}
+  hc+=`<tr title="${(f.fuente||"").replace(/"/g,"'")}"><td class="mut">${f.cod}</td><td>${f.nombre}</td><td class="num">${cel(f)}</td><td class="num">${puTxt(f)}</td><td class="num">${fmt(f.total)}</td></tr>`;});
+ hc+=`<tr class="tot"><td></td><td>Costo directo</td><td></td><td></td><td class="num">${fmt(INV.cd)}</td></tr>
+  <tr><td></td><td>GG y utilidades (${fmt(100*PRECIOS.factores.gg,0)} %)</td><td></td><td></td><td class="num">${fmt(INV.gg)}</td></tr>
+  <tr><td></td><td>IVA (${fmt(100*PRECIOS.factores.iva,0)} %)</td><td></td><td></td><td class="num">${fmt(INV.iva)}</td></tr>
+  <tr class="tot"><td></td><td>Total sin expropiación</td><td></td><td></td><td class="num">${fmt(INV.sinExp)}</td></tr>`;
+ for(const [k,et] of [["expE2","E2 · sólo estaciones"],["expE1","E1 · faja y estaciones"]]){hc+=`<tr class="grp"><td colspan="5">Expropiación ${et}</td></tr>`;
+  INV[k].forEach(f=>hc+=`<tr title="${(f.fuente||"").replace(/"/g,"'")}"><td class="mut">${f.cod}</td><td>${f.nombre}</td><td class="num">${fmt(f.cant)} ${f.unidad}</td><td class="num">${f.pu==null?"–":fmt(f.pu,2)}</td><td class="num">${fmt(f.total)}</td></tr>`);}
+ hc+="</table>";
+ const dl=INV.detLineas.map(d=>`${d.linea}: ${fmt(d.Li)} m inclinados · cable ${fmt(d.cable)} m · ciclo ${fmt(d.ciclo/60,1)} min → flota ${d.flota} cabinas · ${d.torres} torres`).join("<br>");
  $("tInv").innerHTML=`<div class="total"><span class="l">Total con expropiación E2</span><span class="v">${fmt(INV.E2)} UF</span></div>
   <div class="total"><span class="l">Total con expropiación E1</span><span class="v" style="font-size:1.05rem">${fmt(INV.E1)} UF</span></div>
   <div class="nota">≈ MM$ ${fmt(INV.E2*V("uf_clp")/1e6)} (E2) · MM$ ${fmt(INV.E1*V("uf_clp")/1e6)} (E1) · ${INV.nFis} estaciones físicas</div>
-  <details class="desp"><summary>Desglose por partida</summary><table><tr><th>Partida</th><th>UF</th><th>%</th></tr>`+g("Estaciones electromecánicas",c.em)+g("Recargo por ángulos",c.recargo)+g(`Torres (${INV.nTor} de la rasante)`,c.torres)+g("Cables",c.cables)+g("Cabinas",c.cabinas)+
-  g("Garaje, repuestos y rescate",c.otros_em)+g("Montaje",c.montaje)+g("Arquitectura de estaciones",c.arq)+g("Estructuras",c.estr)+g("Instalaciones eléctricas",c.elec)+g("Obras urbanas complementarias",c.urb)+
-  g("Costo directo",INV.cd,"tot")+`<tr><td>GG y utilidades (35 %)</td><td>${fmt(INV.gg)}</td><td></td></tr><tr><td>IVA (19 %)</td><td>${fmt(INV.iva)}</td><td></td></tr>
-  <tr class="tot"><td>Total sin expropiación</td><td>${fmt(INV.sinExp)}</td><td></td></tr><tr><td>Expropiación E2</td><td>${fmt(VAL.E2.uf)}</td><td></td></tr><tr><td>Expropiación E1</td><td>${fmt(VAL.E1.uf)}</td><td></td></tr></table>
-  <div class="nota">Referencia: anteproyecto P178 completo = 2.127.475 UF de costo directo y 3.548.151 UF de total privado con expropiaciones (P246 Cuadro 1.2-11).</div></details>`;
+  <details class="desp"><summary>Cubicación y precios unitarios</summary>${hc}
+  <div class="nota">${dl}</div>
+  <div class="nota">Cantidades medidas del trazado; precios unitarios del presupuesto P178 (${PRECIOS.version}). Pasa el cursor sobre cada partida para ver de qué ítem sale su precio. Calibraciones declaradas: flota × ${PRECIOS.factores.factor_flota} (flota del P178 ÷ flota física) y cable × ${PRECIOS.factores.factor_cable} (bucles). Torres a precio promedio: el P178 no permite distinguir por altura. Referencia: anteproyecto P178 completo = ${fmt(PRECIOS.contraste.p178_costo_directo_uf)} UF de costo directo.</div>
+  <div class="row"><button class="b" id="bCub">Exportar cubicación (CSV)</button></div></details>`;
+ $("bCub").onclick=()=>{const L=[["codigo","grupo","partida","cantidad","unidad","pu_uf","total_uf","fuente"]];
+  const fx=f=>[f.cod,f.grupo,f.nombre,(+f.cant).toFixed(2),f.unidad,f.pu==null?"":(+f.pu).toFixed(4),(+f.total).toFixed(0),f.fuente||""];
+  INV.filas.forEach(f=>L.push(fx(f)));L.push(["","","Costo directo","","","",INV.cd.toFixed(0),""],["","","GG y utilidades","","","",INV.gg.toFixed(0),""],["","","IVA","","","",INV.iva.toFixed(0),""],["","","Total sin expropiación","","","",INV.sinExp.toFixed(0),""]);
+  INV.expE2.forEach(f=>L.push(fx({...f,grupo:"Expropiación E2"})));INV.expE1.forEach(f=>L.push(fx({...f,grupo:"Expropiación E1"})));
+  L.push(["","","Total con expropiación E2","","","",INV.E2.toFixed(0),""],["","","Total con expropiación E1","","","",INV.E1.toFixed(0),""]);
+  const csv="﻿"+L.map(r=>r.map(x=>{x=String(x);return /[;"\n]/.test(x)?`"${x.replace(/"/g,'""')}"`:x;}).join(";")).join("\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`cubicacion_${PID}_${($("nomTraz").value||"trazado").replace(/[^\w-]+/g,"_")}.csv`;a.click();};
  $("fuentes").textContent="Fuentes: "+D.meta.fuentes+" · datos generados "+D.meta.generado.slice(0,10)+(D.meta.comunas_sin_catastro_sii&&D.meta.comunas_sin_catastro_sii.length?" · ⚠ sin catastro SII: "+D.meta.comunas_sin_catastro_sii.join(", "):"");}
 
 // =============================================================== corte
