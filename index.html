@@ -293,7 +293,7 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
 </script>
 <script>
 "use strict";
-const VERSION = "202610072131";
+const VERSION = "202610142100";
 let D=null, PID=null, INDICE=null;
 const $=id=>document.getElementById(id);
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -319,6 +319,7 @@ const P={
  est_ancho:{v:24,l:"Estación: ancho (m)",g:"pCost",n:"Tel-Thno.kmz"},
  h_est:{v:8,l:"Cable sobre estación (m)",g:"pCost",n:"supuesto"},
  rasante_modo:{v:"galibo",l:"Ubicación de torres",g:"pCost",t:"sel",o:[["minimo","Mínimo de torres (más altas)"],["galibo","Apoyo donde el cable toca el gálibo"]],n:"Mínimo: el menor número de torres que cumple vano máximo, gálibo y altura máxima; cada torre se corre hacia el terreno alto (±20 % del vano). Sin catenaria: la altura es un mínimo geométrico. Gálibo: regla validada contra el P178 (30 vs 31 torres)"},
+ galibo_techo:{v:5,l:"Gálibo sobre techos (m, 0 = no mirar edificios)",g:"pCost",n:"cable sobre el techo de cada edificio bajo la faja; altura = pisos SII × 2,8 m sobre el terreno (supuesto). Pedido de diseno_conceptual, 2026-10-08"},
  galibo:{v:10,l:"Gálibo mínimo (m)",g:"pCost",n:"supuesto"},
  suelo:{v:"central",l:"Valor del suelo",g:"pCost",t:"sel",o:[["central","Central (casas)"],["bajo","Bajo (eriazos)"]]},
  vano_max:{v:320,l:"Vano máximo entre apoyos (m)",g:"pCost",n:"P178: vano mayor 310 m"},
@@ -629,19 +630,29 @@ const radioDe=e=>e.r||V("radio");
 // apoyos donde el gálibo no alcanza (en el punto de mayor déficit, con la cima a gálibo sobre el terreno) y
 // luego donde el vano excede el máximo. Sin catenaria: el cable entre apoyos es recto.
 const cacheRas=new Map();
+// cota mínima del cable en cada punto del eje: terreno + gálibo, o techo + gálibo sobre techos de los edificios bajo la faja
+function techos(pts){const g=V("galibo"),gt=V("galibo_techo"),w=V("faja")/2;
+ for(const p of pts){let ob=p[1]+g;
+  if(gt>0&&D.edificaciones){const q=p[2],b=[q[0]-w,q[1]-w,q[0]+w,q[1]+w];
+   for(const i of candidatos(IE,b)){const e=D.edificaciones[i];
+    const sq=turf.polygon([[toLL(b[0],b[1]),toLL(b[2],b[1]),toLL(b[2],b[3]),toLL(b[0],b[3]),toLL(b[0],b[1])]]);
+    if(!turf.booleanIntersects(polyT(e[0]),sq))continue;
+    const c0=e[0][0][0],techo=cota(c0[0],c0[1])+(e[4]||1)*2.8;if(techo+gt>ob){ob=techo+gt;p[5]=techo;}}}
+  p[4]=ob;}}
 function rasante(l){
- const key=JSON.stringify(l.est.map(e=>[e.lon,e.lat]))+[P.h_est.v,P.galibo.v,P.vano_max.v,P.vano_min.v,P.est_largo.v,P.rasante_modo.v,P.h_torre_max.v].join();
+ const key=JSON.stringify(l.est.map(e=>[e.lon,e.lat]))+[P.h_est.v,P.galibo.v,P.galibo_techo.v,P.faja.v,P.vano_max.v,P.vano_min.v,P.est_largo.v,P.rasante_modo.v,P.h_torre_max.v].join();
  if(cacheRas.has(key))return cacheRas.get(key);
  const pts=[],estX=[],sop=[];let acum=0;
  for(let i=0;i<l.est.length-1;i++){const a=toXY(l.est[i].lon,l.est[i].lat),b=toXY(l.est[i+1].lon,l.est[i+1].lat),Lm=dist(a,b),n=Math.max(1,Math.ceil(Lm/10));
   estX.push([acum,l.est[i]]);for(let k=0;k<n;k++){const f=k/n,q=[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],ll=toLL(...q);pts.push([acum+Lm*f,cota(ll[0],ll[1]),q,i]);}acum+=Lm;}
  const u=l.est[l.est.length-1];estX.push([acum,u]);pts.push([acum,cota(u.lon,u.lat),toXY(u.lon,u.lat),l.est.length-2]);
  const g=V("galibo"),he=V("h_est");
+ techos(pts);
  for(let i=0;i<estX.length-1;i++){
   const x0=estX[i][0],x1=estX[i+1][0],dz=V("est_largo")/2+10,seg=pts.filter(p=>p[0]>x0+dz&&p[0]<x1-dz);   // la zona de estación no exige gálibo: el cable baja al andén
   const ap=[[x0,cota(estX[i][1].lon,estX[i][1].lat)+he,"est"],[x1,cota(estX[i+1][1].lon,estX[i+1][1].lat)+he,"est"]];
-  const refinar=(A,B)=>{let peor=null;for(const p of seg){if(p[0]<=A[0]||p[0]>=B[0])continue;const zc=A[1]+(B[1]-A[1])*(p[0]-A[0])/(B[0]-A[0]),def=p[1]+g-zc;if(def>.05&&(!peor||def>peor.def))peor={p,def};}
-   if(!peor)return [];const T=[peor.p[0],peor.p[1]+g,"torre",peor.p[1]];return [...refinar(A,T),T,...refinar(T,B)];};
+  const refinar=(A,B)=>{let peor=null;for(const p of seg){if(p[0]<=A[0]||p[0]>=B[0])continue;const zc=A[1]+(B[1]-A[1])*(p[0]-A[0])/(B[0]-A[0]),def=p[4]-zc;if(def>.05&&(!peor||def>peor.def))peor={p,def};}
+   if(!peor)return [];const T=[peor.p[0],peor.p[4],"torre",peor.p[1]];return [...refinar(A,T),T,...refinar(T,B)];};
   // modo «mínimo de torres»: n torres (n mínimo por vano máximo), corridas al terreno alto y elevadas hasta el gálibo
   const minimo=(A,B)=>{const Lr=B[0]-A[0],segT=pts.filter(p=>p[0]>A[0]+dz&&p[0]<B[0]-dz);let ult=null;
    for(let n=Math.max(0,Math.ceil(Lr/V("vano_max"))-1);n<=80;n++){const sp=Lr/(n+1),w=Math.max(0,Math.min(.2*sp,(V("vano_max")-sp)/2));
@@ -649,7 +660,7 @@ function rasante(l){
     const cad=[A,...T,B];let peorG=0;
     for(let it=0;it<300;it++){peorG=0;
      for(let k=0;k<cad.length-1;k++){const P0=cad[k],P1=cad[k+1];let pe=null;
-      for(const p of seg){if(p[0]<=P0[0]||p[0]>=P1[0])continue;const zc=P0[1]+(P1[1]-P0[1])*(p[0]-P0[0])/(P1[0]-P0[0]),d=p[1]+g-zc;if(d>.05&&(!pe||d>pe.d))pe={d,x:p[0]};}
+      for(const p of seg){if(p[0]<=P0[0]||p[0]>=P1[0])continue;const zc=P0[1]+(P1[1]-P0[1])*(p[0]-P0[0])/(P1[0]-P0[0]),d=p[4]-zc;if(d>.05&&(!pe||d>pe.d))pe={d,x:p[0]};}
       if(!pe)continue;peorG=Math.max(peorG,pe.d);const f=(pe.x-P0[0])/(P1[0]-P0[0]),t0=P0[2]==="torre",t1=P1[2]==="torre";
       if(t0&&t1){const q=f*f+(1-f)*(1-f);P0[1]+=pe.d*(1-f)/q+.01;P1[1]+=pe.d*f/q+.01;}
       else if(t1)P1[1]+=pe.d/Math.max(f,.05)+.01;else if(t0)P0[1]+=pe.d/Math.max(1-f,.05)+.01;else peorG=Infinity;}
@@ -661,7 +672,7 @@ function rasante(l){
   else{
   let cad=[ap[0],...refinar(ap[0],ap[1]),ap[1]];
   // fusiona apoyos más cercanos que el vano mínimo en uno más alto, y vuelve a exigir gálibo a ambos lados
-  const deficit=(A,B)=>{let m=0;for(const p of seg){if(p[0]<=A[0]||p[0]>=B[0])continue;const zc=A[1]+(B[1]-A[1])*(p[0]-A[0])/(B[0]-A[0]);m=Math.max(m,p[1]+g-zc);}return m;};
+  const deficit=(A,B)=>{let m=0;for(const p of seg){if(p[0]<=A[0]||p[0]>=B[0])continue;const zc=A[1]+(B[1]-A[1])*(p[0]-A[0])/(B[0]-A[0]);m=Math.max(m,p[4]-zc);}return m;};
   for(let it=0;it<30&&V("vano_min")>0;it++){let k=-1;for(let q=1;q<cad.length-2;q++)if(cad[q+1][0]-cad[q][0]<V("vano_min")){k=q;break;}
    if(k<0){for(let q=1;q<cad.length-1;q++){if(cad[q][0]-cad[q-1][0]<V("vano_min")&&cad[q-1][2]==="est"&&q+1<cad.length&&cad[q+1][2]!=="est"){k=q;break;}}if(k<0)break;cad.splice(k,1);continue;}
    const a=cad[k],b=cad[k+1],T=a[1]>=b[1]?[a[0],a[1],"torre",a[3]]:[b[0],b[1],"torre",b[3]];
