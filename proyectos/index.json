@@ -1,6 +1,21 @@
 {
  "proyectos": [
   {
+   "id": "chiguayante",
+   "nombre": "Teleférico Chiguayante",
+   "listo": true,
+   "bbox": [
+    -73.02674,
+    -36.92155,
+    -73.00304,
+    -36.90847
+   ],
+   "centro": [
+    -73.021132,
+    -36.912971
+   ]
+  },
+  {
    "id": "talcahuano",
    "nombre": "Teleférico de Talcahuano",
    "listo": true,
