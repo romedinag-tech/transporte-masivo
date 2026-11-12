@@ -25,7 +25,8 @@
 html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font:13px/1.45 var(--font-ui);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 .num{font-family:var(--font-data)}
 /* ---- layout ---- */
-#app{display:grid;grid-template-rows:auto auto 1fr;height:100vh}
+#app{display:grid;grid-template-rows:auto auto 1fr auto;height:100vh}
+.pie-licencia{font-size:11px;line-height:1.5;color:var(--ink-lo);padding:4px 16px;text-align:center;border-top:1px solid var(--line);background:var(--surface)}.pie-licencia a{color:inherit}
 .apptop{position:relative;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:var(--grad);color:#fff;text-align:center}
 .apptop .title{font-family:var(--font-display);font-weight:700;font-size:1.2rem;line-height:1.1}
 .apptop .sub{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;opacity:.8;font-weight:600}
@@ -193,6 +194,12 @@ ol.pasos{padding-left:18px;margin:6px 0;font-size:.8rem;color:var(--ink-mid)}
     <p class="nota" id="fuentes"></p></div>
   </aside>
  </main>
+ <footer class="pie-licencia">
+  © 2026 Rodrigo Medina González · Transporte público masivo ·
+  Contenido bajo <a href="https://creativecommons.org/licenses/by-nc/4.0/deed.es" rel="license">CC BY-NC 4.0</a>
+  (citar la fuente; uso comercial sólo con autorización) · Código: todos los derechos reservados ·
+  Datos de base: sus instituciones de origen.
+ </footer>
 </div>
 <div class="modal" id="modal"><div class="card">
  <p class="eyebrow">Nuevo proyecto</p><h3>Definir área de estudio y trazado referencial</h3>

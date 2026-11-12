@@ -28,5 +28,7 @@ escrituras de toda el área.
 Fuentes: Censo 2024 (INE) · catastro SII · ortofoto SECTRA 2023-24 · OpenStreetMap ·
 Copernicus GLO-30 · SII F2890 (agregado) · SECTRA P178/P246 · MTT.
 
-Método: `docs/METODO_v0.md`. Los scripts de `scripts/` reconstruyen la herramienta desde datos
-locales que no se publican.
+Método: `docs/METODO_v0.md`. El motor que construye la herramienta desde datos locales no se publica.
+
+**Licencia.** © 2026 Rodrigo Medina González. Contenido bajo CC BY-NC 4.0; código con todos los derechos
+reservados. Detalle en `LICENSE`.
